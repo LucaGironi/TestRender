@@ -3,7 +3,6 @@ import dash
 from dash import html, dcc
 from dash.dependencies import Input, Output, State
 import plotly.graph_objs as go
-import dash_extensions.enrich as de
 from plotly.subplots import make_subplots
 
 # Constants
@@ -13,7 +12,7 @@ mu_e = 36000e-4  # mm^2/V/s
 mu_h = 42000e-4  # mm^2/V/s
 q = 1.6e-19  # C
 dt = 0.001  # s
-total_time = 0.1  # s (updated)
+total_time = 0.1  # s
 steps = int(total_time / dt)
 
 def E_r(r, V):
@@ -30,8 +29,8 @@ def generate_initial_positions(n):
 def polar_to_cartesian(r, theta):
     return r * np.cos(theta), r * np.sin(theta)
 
-app = de.Dash(__name__)
-server = app.server
+app = dash.Dash(__name__)
+server = app.server  # for Render
 
 default_n = 15
 r0, theta0 = generate_initial_positions(default_n)
@@ -64,6 +63,7 @@ app.layout = html.Div([
     Output('current-data', 'data'),
     Input('reset-button', 'n_clicks'),
     State('count-slider', 'value'),
+    prevent_initial_call=True
 )
 def reset_simulation(_, num_pairs):
     r, theta = generate_initial_positions(num_pairs)
@@ -73,9 +73,9 @@ def reset_simulation(_, num_pairs):
     Output('interval', 'disabled'),
     Output('frame-store', 'data'),
     Input('start-button', 'n_clicks'),
-    State('frame-store', 'data'),
+    prevent_initial_call=True
 )
-def start_simulation(_, frame):
+def start_simulation(_):
     return False, 0
 
 @app.callback(
@@ -104,7 +104,6 @@ def update_plot(_, frame, r_init, theta, V, current_data):
     xe, ye = polar_to_cartesian(r_e, theta)
     xh, yh = polar_to_cartesian(r_h, theta)
 
-    # Compute induced current
     ve = mu_e * E_r(r_e, V)
     vh = mu_h * E_r(r_h, V)
     we = weighting_field(r_e)
@@ -125,14 +124,11 @@ def update_plot(_, frame, r_init, theta, V, current_data):
         column_widths=[0.5, 0.5]
     )
 
-    # Left plot: drift
     fig.add_trace(go.Scatter(x=xe, y=ye, mode='markers', marker=dict(color='blue', size=8), name='Electrons'), row=1, col=1)
     fig.add_trace(go.Scatter(x=xh, y=yh, mode='markers', marker=dict(color='red', size=8), name='Holes'), row=1, col=1)
-
     fig.update_xaxes(title_text="x (mm)", range=[-r_out - 1, r_out + 1], row=1, col=1)
     fig.update_yaxes(title_text="y (mm)", range=[-r_out - 1, r_out + 1], scaleanchor="x", scaleratio=1, row=1, col=1)
 
-    # Right plot: current
     fig.add_trace(go.Scatter(x=current_data['time'], y=current_data['Ie'],
                              mode='lines', name='Electrons (pA)', line=dict(color='blue')), row=1, col=2)
     fig.add_trace(go.Scatter(x=current_data['time'], y=current_data['Ih'],
@@ -142,14 +138,9 @@ def update_plot(_, frame, r_init, theta, V, current_data):
 
     fig.update_xaxes(title_text="Time (s)", row=1, col=2)
     fig.update_yaxes(title_text="Current (pA)", row=1, col=2)
-
-    fig.update_layout(
-        height=600,
-        title=f"Time: {time:.3f} s — Bias: {V} V",
-        showlegend=True
-    )
+    fig.update_layout(height=600, title=f"Time: {time:.3f} s — Bias: {V} V", showlegend=True)
 
     return fig, frame + 1, current_data
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run_server(debug=True)
