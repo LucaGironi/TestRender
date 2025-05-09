@@ -3,3 +3,4 @@ plotly
 gunicorn
 numpy
 pandas
+dash-extensions
